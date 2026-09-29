@@ -22,7 +22,12 @@ bool ManifestManager::load(const std::filesystem::path& file,VersionManifest& o,
     auto readArgs=[&](const char* key,std::vector<std::string>& out){
       for(const auto& a:j.value(key,json::array())) if(a.is_string()) out.push_back(a.get<std::string>());
     };
-    if(j.contains("arguments")){readArgs("arguments",o.gameArguments);}
+    if(j.contains("minecraftArguments") && j["minecraftArguments"].is_string()) o.gameArguments.push_back(j["minecraftArguments"].get<std::string>());
+    if(j.contains("arguments")){
+      auto args=j["arguments"];
+      auto collect=[&](const char* key,std::vector<std::string>& out){ if(args.contains(key)&&args[key].is_array()) for(const auto& a:args[key]) if(a.is_string()) out.push_back(a.get<std::string>()); };
+      collect("jvm",o.jvmArguments); collect("game",o.gameArguments);
+    }
     if(o.id.empty()){e="Invalid version metadata: missing id";return false;}
     return true;
   }catch(const std::exception& ex){e=std::string("Invalid Minecraft JSON: ")+ex.what();return false;}
