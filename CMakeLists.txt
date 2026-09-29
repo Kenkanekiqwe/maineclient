@@ -12,10 +12,12 @@ add_executable(MaineClient
   src/core/config.cpp src/core/config.hpp
   src/core/hardware.cpp src/core/hardware.hpp
   src/core/launcher.cpp src/core/launcher.hpp
+  src/core/java_runtime.cpp src/core/java_runtime.hpp
   src/minecraft/version.cpp src/minecraft/version.hpp
   src/minecraft/manifest.cpp src/minecraft/manifest.hpp
   src/minecraft/download.cpp src/minecraft/download.hpp
   src/minecraft/version_downloader.cpp src/minecraft/version_downloader.hpp
+  src/minecraft/launcher.cpp src/minecraft/launcher.hpp
   src/optimization/profile.cpp src/optimization/profile.hpp
   src/optimization/optimizer.cpp src/optimization/optimizer.hpp
   src/ui/main_window.cpp src/ui/main_window.hpp
