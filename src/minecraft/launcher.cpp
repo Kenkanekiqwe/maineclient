@@ -1,6 +1,7 @@
 #include "launcher.hpp"
 #include "version_downloader.hpp"
 #include "download.hpp"
+#include "native_extractor.hpp"
 #include <windows.h>
 #include <filesystem>
 #include <fstream>
@@ -23,6 +24,22 @@ bool MinecraftLauncher::launch(const LaunchRequest& req,std::string& e) const {
   auto natives=instance/"natives";
   std::filesystem::create_directories(natives);
   std::string cp=jar.string();
+  for(const auto& x:j.value("libraries",json::array())){
+    if(!allowed(x)) continue;
+    auto natives=x.value("natives",json{});
+    if(natives.is_object() && natives.contains("windows")){
+      auto classifier=natives["windows"].get<std::string>();
+      auto archive=x.value("downloads",json{}).value("classifiers",json{}).value(classifier,json{});
+      auto path=archive.value("path","");
+      if(!path.empty()){
+        auto nativeArchive=paths_.libraries/path;
+        if(std::filesystem::exists(nativeArchive)){
+          std::string ne;
+          if(!NativeExtractor::extractJar(nativeArchive,natives,ne)){e=ne;return false;}
+        }
+      }
+    }
+  }
   auto allowed=[&](const json& x){
     if(!x.contains("rules")||!x["rules"].is_array()) return true;
     bool result=false;
