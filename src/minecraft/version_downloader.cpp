@@ -33,8 +33,8 @@ bool VersionDownloader::install(const std::string& version,std::string& e){
         if(hash.size()<2) continue;
         auto target=paths_.assets/"objects"/hash.substr(0,2)/hash;
         if(std::filesystem::exists(target) && Downloader::sha1(target)==hash) continue;
-        auto url="https://resources.download.minecraft.net/"+hash.substr(0,2)+"/"+hash;
-        r=Downloader::file(url,target,hash);
+        auto assetUrl="https://resources.download.minecraft.net/"+hash.substr(0,2)+"/"+hash;
+        r=Downloader::file(assetUrl,target,hash);
         if(!r.ok){e="Asset "+logical+": "+r.error;return false;}
       }
     }
