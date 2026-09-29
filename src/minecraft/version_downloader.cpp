@@ -1,17 +1,26 @@
 #include "version_downloader.hpp"
 #include "download.hpp"
+#include <fstream>
+#include <regex>
 namespace maine::minecraft {
+static std::string jsonFieldAt(const std::string& s,std::size_t from,const std::string& key){
+  std::regex r(R"(")" + key + R"("\s*:\s*"([^"]*)")");
+  std::smatch m; auto begin=s.cbegin()+static_cast<std::ptrdiff_t>(from);
+  return std::regex_search(begin,s.cend(),m,r)?m[1].str():"";
+}
 bool VersionDownloader::install(const std::string& version,std::string& e){
-  if(version.empty()){e="Version is empty";return false;}
   const std::string manifestUrl="https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
   auto manifestFile=paths_.versions/"version_manifest_v2.json";
   auto r=Downloader::file(manifestUrl,manifestFile); if(!r.ok){e=r.error;return false;}
-  std::ifstream in(manifestFile); std::string s((std::istreambuf_iterator<char>(in)),{});
-  std::string needle="\"id\":\""+version+"\""; auto pos=s.find(needle);
-  if(pos==std::string::npos){e="Minecraft version not found: "+version;return false;}
-  auto u=s.find("\"url\"",pos); if(u==std::string::npos){e="Version URL missing";return false;}
-  auto q=s.find('\"',u+5); q=s.find('\"',q+1); auto q2=s.find('\"',q+1); if(q==std::string::npos||q2==std::string::npos){e="Invalid manifest";return false;}
-  std::string url=s.substr(q+1,q2-q-1);
+  std::ifstream in(manifestFile,std::ios::binary); std::string s((std::istreambuf_iterator<char>(in)),{});
+  std::regex idRe(R"("id"\s*:\s*"([^"]*)")"); std::smatch m; auto it=s.cbegin();
+  std::string url;
+  while(std::regex_search(it,s.cend(),m,idRe)){
+    if(m[1].str()==version){std::size_t pos=static_cast<std::size_t>(m.position(0)+(it-s.cbegin()));
+      url=jsonFieldAt(s,pos,"url"); break;}
+    it=m.suffix().first;
+  }
+  if(url.empty()){e="Minecraft version not found: "+version;return false;}
   auto dir=paths_.versions/version; std::filesystem::create_directories(dir);
   auto out=dir/(version+".json"); r=Downloader::file(url,out); if(!r.ok){e=r.error;return false;}
   return true;
