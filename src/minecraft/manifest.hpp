@@ -4,7 +4,7 @@
 #include <vector>
 namespace maine::minecraft {
 struct Library {
-  std::string name, url, sha1, path;
+  std::string name, url, sha1, path, nativeUrl, nativeSha1, nativePath;
   bool native=false, allowed=true;
 };
 struct VersionManifest {
