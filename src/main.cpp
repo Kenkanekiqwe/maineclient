@@ -3,6 +3,7 @@
 #include "ui/main_window.hpp"
 #include <fstream>
 #include <exception>
+#include <cstring>
 #ifdef _WIN32
 #include <windows.h>
 #endif
