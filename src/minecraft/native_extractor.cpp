@@ -3,7 +3,6 @@
 #include <fstream>
 #include <vector>
 namespace maine::minecraft {
-static unsigned short le16(const unsigned char* p){return (unsigned short)p[0]|((unsigned short)p[1]<<8);}
 #include <vector>
 bool NativeExtractor::extractJar(const std::filesystem::path& archive,const std::filesystem::path& dest,std::string& error){
  std::filesystem::create_directories(dest);
