@@ -27,11 +27,30 @@ bool VersionDownloader::install(const std::string& version,std::string& e){
       if(!std::filesystem::exists(ai)||(!vm.assetIndexSha1.empty()&&Downloader::sha1(ai)!=vm.assetIndexSha1)){
         r=Downloader::file(vm.assetIndexUrl,ai,vm.assetIndexSha1); if(!r.ok){e="Asset index: "+r.error;return false;}
       }
+      std::ifstream af(ai); json assets; af>>assets;
+      for(const auto& [logical,obj] : assets.value("objects",json::object()).items()){
+        std::string hash=obj.value("hash","");
+        if(hash.size()<2) continue;
+        auto target=paths_.assets/"objects"/hash.substr(0,2)/hash;
+        if(std::filesystem::exists(target) && Downloader::sha1(target)==hash) continue;
+        auto url="https://resources.download.minecraft.net/"+hash.substr(0,2)+"/"+hash;
+        r=Downloader::file(url,target,hash);
+        if(!r.ok){e="Asset "+logical+": "+r.error;return false;}
+      }
     }
     for(const auto& lib:vm.libraries) if(lib.allowed){
-      auto target=paths_.libraries/lib.path;
-      if(!std::filesystem::exists(target) || (!lib.sha1.empty()&&Downloader::sha1(target)!=lib.sha1)){
-        r=Downloader::file(lib.url,target,lib.sha1); if(!r.ok){e="Library "+lib.name+": "+r.error;return false;}
+      if(!lib.url.empty() && !lib.path.empty()){
+        auto target=paths_.libraries/lib.path;
+        if(!std::filesystem::exists(target) || (!lib.sha1.empty()&&Downloader::sha1(target)!=lib.sha1)){
+          r=Downloader::file(lib.url,target,lib.sha1); if(!r.ok){e="Library "+lib.name+": "+r.error;return false;}
+        }
+      }
+      if(lib.native && !lib.nativeUrl.empty() && !lib.nativePath.empty()){
+        auto target=paths_.libraries/lib.nativePath;
+        if(!std::filesystem::exists(target) || (!lib.nativeSha1.empty()&&Downloader::sha1(target)!=lib.nativeSha1)){
+          r=Downloader::file(lib.nativeUrl,target,lib.nativeSha1);
+          if(!r.ok){e="Native "+lib.name+": "+r.error;return false;}
+        }
       }
     }
     return true;
