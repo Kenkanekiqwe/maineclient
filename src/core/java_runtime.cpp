@@ -11,7 +11,7 @@
 namespace maine::core {
 
 static std::string runVersion(const std::filesystem::path& exe){
-  std::string cmd="""+exe.string()+"" -version 2>&1";
+  std::string cmd="\""+exe.string()+"\" -version 2>&1";
   FILE* p=_popen(cmd.c_str(),"r"); if(!p)return{};
   std::array<char,512> b{}; std::string out;
   while(fgets(b.data(),(int)b.size(),p))out+=b.data();
