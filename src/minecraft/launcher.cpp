@@ -20,9 +20,17 @@ bool MinecraftLauncher::launch(const LaunchRequest& req,std::string& e) const {
   if(java.executable.empty()) java=jm.detect();
   if(java.executable.empty()){e="Java runtime not found";return false;}
   auto instance=paths_.instances/config_.selectedInstance;
-  std::filesystem::create_directories(instance);
-  auto natives=instance/"natives";
-  std::filesystem::create_directories(natives);
+  auto nativeRoot=instance/"natives";
+  std::filesystem::create_directories(nativeRoot);
+  auto allowed=[&](const json& x){
+    if(!x.contains("rules")||!x["rules"].is_array()) return true;
+    bool result=false;
+    for(const auto& r:x["rules"]) {
+      if(r.value("action","")=="allow") result=true;
+      else if(r.value("action","")=="disallow") result=false;
+    }
+    return result;
+  };
   std::string cp=jar.string();
   for(const auto& x:j.value("libraries",json::array())){
     if(!allowed(x)) continue;
@@ -35,19 +43,10 @@ bool MinecraftLauncher::launch(const LaunchRequest& req,std::string& e) const {
         auto nativeArchive=paths_.libraries/path;
         if(std::filesystem::exists(nativeArchive)){
           std::string ne;
-          if(!NativeExtractor::extractJar(nativeArchive,natives,ne)){e=ne;return false;}
+          if(!NativeExtractor::extractJar(nativeArchive,nativeRoot,ne)){e=ne;return false;}
         }
       }
     }
-  }
-  auto allowed=[&](const json& x){
-    if(!x.contains("rules")||!x["rules"].is_array()) return true;
-    bool result=false;
-    for(const auto& r:x["rules"]) if(r.value("action","")=="allow") result=true; else if(r.value("action","")=="disallow") result=false;
-    return result;
-  };
-  for(const auto& x:j.value("libraries",json::array())){
-    if(!allowed(x)) continue;
     auto a=x.value("downloads",json{}).value("artifact",json{});
     auto p=a.value("path","");
     if(!p.empty()) cp+=";"+(paths_.libraries/p).string();
@@ -55,16 +54,17 @@ bool MinecraftLauncher::launch(const LaunchRequest& req,std::string& e) const {
   auto main=j.value("mainClass","");
   if(main.empty()){e="Missing mainClass";return false;}
   auto q=[](std::string s){ for(char& ch:s) if(ch=='"') ch=' '; return s; };
-  std::string gameDir=instance.string(), assets=paths_.assets.string(), nativeDir=natives.string();
+  std::string gameDir=instance.string(), assets=paths_.assets.string(), nativeDir=nativeRoot.string();
   std::string cmd="\""+java.executable.string()+"\"";
   cmd+=" -Xms"+std::to_string(config_.minMemoryMb)+"M -Xmx"+std::to_string(config_.maxMemoryMb)+"M";
   cmd+=" -Djava.library.path=\""+nativeDir+"\"";
   cmd+=" -cp \""+cp+"\" "+main;
   cmd+=" --username \""+q(req.username)+"\" --version \""+config_.selectedVersion+"\"";
   cmd+=" --gameDir \""+gameDir+"\" --assetsDir \""+assets+"\"";
-  cmd+=" --assetIndex \""+j.value("assets", "")+"\" --uuid \""+req.uuid+"\" --accessToken \""+req.accessToken+"\"";
+  cmd+=" --assetIndex \""+j.value("assets","")+"\" --uuid \""+req.uuid+"\" --accessToken \""+req.accessToken+"\"";
   cmd+=" --userType msa --versionType "+j.value("type","release");
   STARTUPINFOA si{}; si.cb=sizeof(si); PROCESS_INFORMATION pi{};
+  if(!std::filesystem::exists(instance)) std::filesystem::create_directories(instance);
   std::vector<char> buf(cmd.begin(),cmd.end()); buf.push_back('\0');
   if(!CreateProcessA(nullptr,buf.data(),nullptr,nullptr,FALSE,CREATE_NO_WINDOW,nullptr,instance.string().c_str(),&si,&pi)){
     e="CreateProcess failed: "+std::to_string(GetLastError()); return false;
