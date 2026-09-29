@@ -49,44 +49,122 @@ std::string Downloader::sha1(const std::filesystem::path& f){
 }
 DownloadResult Downloader::file(const std::string& url,const std::filesystem::path& target,const std::string& expected){
   stage("Downloader::urlParts");
-  std::wstring w(url.begin(),url.end()),host,path; bool https=false; if(!urlParts(w,host,path,https))return{false,"Invalid URL"};
+  std::wstring w(url.begin(),url.end()),host,path; bool https=false;
+  if(!urlParts(w,host,path,https)) return{false,"Invalid URL"};
+
   stage("Downloader::WinHttpOpen");
-  HINTERNET ses=WinHttpOpen(L"MaineClient/0.1",WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,nullptr,nullptr,0); if(!ses)return{false,"WinHttpOpen failed"};
+  HINTERNET ses=WinHttpOpen(L"MaineClient/0.2",WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,nullptr,nullptr,0);
+  if(!ses) return{false,"WinHttpOpen failed: "+std::to_string(GetLastError())};
+
   stage("Downloader::WinHttpConnect");
-  HINTERNET con=WinHttpConnect(ses,host.c_str(),https?INTERNET_DEFAULT_HTTPS_PORT:INTERNET_DEFAULT_HTTP_PORT,0); if(!con){WinHttpCloseHandle(ses);return{false,"WinHttpConnect failed"};}
+  HINTERNET con=WinHttpConnect(ses,host.c_str(),
+      https?INTERNET_DEFAULT_HTTPS_PORT:INTERNET_DEFAULT_HTTP_PORT,0);
+  if(!con){
+    const DWORD err=GetLastError();
+    WinHttpCloseHandle(ses);
+    return{false,"WinHttpConnect failed: "+std::to_string(err)};
+  }
+
   stage("Downloader::WinHttpOpenRequest");
-  DWORD flags=https?WINHTTP_FLAG_SECURE:0; HINTERNET req=WinHttpOpenRequest(con,L"GET",path.c_str(),nullptr,WINHTTP_NO_REFERER,WINHTTP_DEFAULT_ACCEPT_TYPES,flags);
-  if(!req){WinHttpCloseHandle(con);WinHttpCloseHandle(ses);return{false,"WinHttpOpenRequest failed"};}
+  DWORD flags=https?WINHTTP_FLAG_SECURE:0;
+  HINTERNET req=WinHttpOpenRequest(con,L"GET",path.c_str(),nullptr,
+      WINHTTP_NO_REFERER,WINHTTP_DEFAULT_ACCEPT_TYPES,flags);
+  if(!req){
+    const DWORD err=GetLastError();
+    WinHttpCloseHandle(con); WinHttpCloseHandle(ses);
+    return{false,"WinHttpOpenRequest failed: "+std::to_string(err)};
+  }
+
   stage("Downloader::filesystem");
-  bool ok=false; std::filesystem::create_directories(target.parent_path()); auto tmp=target; tmp+=".part";
-  stage("Downloader::WinHttpSendRequest");
-  if(WinHttpSendRequest(req,nullptr,0,nullptr,0,0,0)&&WinHttpReceiveResponse(req,nullptr)){
-    DWORD status=0,sz=sizeof(status); WinHttpQueryHeaders(req,WINHTTP_QUERY_STATUS_CODE|WINHTTP_QUERY_FLAG_NUMBER,nullptr,&status,&sz,nullptr);
-    stage("Downloader::headers");
-    if(status>=200&&status<300){std::ofstream out(tmp,std::ios::binary|std::ios::trunc); char b[1<<16]; DWORD n=0; while(WinHttpReadData(req,b,sizeof(b),&n)&&n)out.write(b,n); out.close(); ok=bool(out);}
-  }
-  stage("Downloader::close");
-  WinHttpCloseHandle(req);WinHttpCloseHandle(con);WinHttpCloseHandle(ses);
-  if(!ok){std::error_code ec;std::filesystem::remove(tmp,ec);return{false,"Download failed: "+url};}
-  stage("Downloader::sha1");
-  if(!expected.empty() && sha1(tmp)!=expected){std::error_code ec;std::filesystem::remove(tmp,ec);return{false,"SHA-1 mismatch: "+url};}
-  stage("Downloader::install");
   std::error_code ec;
-  if(!std::filesystem::exists(tmp,ec) || ec){
-    return{false,"Downloaded temporary file is missing: "+tmp.string()};
-  }
-  ec.clear();
   std::filesystem::create_directories(target.parent_path(),ec);
   if(ec){
-    std::filesystem::remove(tmp,ec);
-    return{false,"Cannot create target directory: "+ec.message()};
+    WinHttpCloseHandle(req); WinHttpCloseHandle(con); WinHttpCloseHandle(ses);
+    return{false,"Cannot create download directory: "+ec.message()};
   }
-  ec.clear();
-  if(!MoveFileExW(tmp.c_str(),target.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_COPY_ALLOWED|MOVEFILE_WRITE_THROUGH)){
-    const DWORD winErr=GetLastError();
-    std::filesystem::remove(tmp,ec);
-    return{false,"Cannot install downloaded file (Win32 error "+std::to_string(winErr)+"): "+target.string()};
+
+  const std::wstring targetW=target.wstring();
+  const std::wstring tmpW=(std::filesystem::path(target.string()+".part")).wstring();
+
+  stage("Downloader::WinHttpSendRequest");
+  bool ok=false;
+  if(WinHttpSendRequest(req,nullptr,0,nullptr,0,0,0) &&
+     WinHttpReceiveResponse(req,nullptr)){
+    DWORD status=0,sz=sizeof(status);
+    if(WinHttpQueryHeaders(req,WINHTTP_QUERY_STATUS_CODE|WINHTTP_QUERY_FLAG_NUMBER,
+                           nullptr,&status,&sz,nullptr) &&
+       status>=200 && status<300){
+      stage("Downloader::headers");
+      HANDLE out=CreateFileW(tmpW.c_str(),GENERIC_WRITE,0,nullptr,CREATE_ALWAYS,
+                             FILE_ATTRIBUTE_NORMAL,nullptr);
+      if(out!=INVALID_HANDLE_VALUE){
+        char buffer[1<<16];
+        DWORD n=0;
+        ok=true;
+        for(;;){
+          n=0;
+          if(!WinHttpReadData(req,buffer,sizeof(buffer),&n)){ok=false;break;}
+          if(n==0)break;
+          DWORD written=0;
+          if(!WriteFile(out,buffer,n,&written,nullptr) || written!=n){
+            ok=false; break;
+          }
+        }
+        FlushFileBuffers(out);
+        CloseHandle(out);
+      }else{
+        return{false,"Cannot create temporary download file (Win32 error "+
+                      std::to_string(GetLastError())+"): "+tmpW};
+      }
+    }else{
+      return{false,"HTTP download failed (status "+std::to_string(status)+"): "+url};
+    }
   }
+
+  stage("Downloader::close");
+  WinHttpCloseHandle(req); WinHttpCloseHandle(con); WinHttpCloseHandle(ses);
+
+  if(!ok){
+    DeleteFileW(tmpW.c_str());
+    return{false,"Download failed: "+url};
+  }
+
+  stage("Downloader::sha1");
+  if(!expected.empty()){
+    const std::string actual=sha1(std::filesystem::path(tmpW));
+    if(actual.empty()){
+      DeleteFileW(tmpW.c_str());
+      return{false,"Cannot calculate SHA-1: "+tmpW};
+    }
+    if(actual!=expected){
+      DeleteFileW(tmpW.c_str());
+      return{false,"SHA-1 mismatch: "+url};
+    }
+  }
+
+  stage("Downloader::install_begin");
+  if(GetFileAttributesW(tmpW.c_str())==INVALID_FILE_ATTRIBUTES){
+    return{false,"Downloaded temporary file is missing: "+tmpW};
+  }
+
+  stage("Downloader::install_delete_old");
+  DeleteFileW(targetW.c_str());
+
+  stage("Downloader::install_copy");
+  if(!CopyFileW(tmpW.c_str(),targetW.c_str(),FALSE)){
+    const DWORD err=GetLastError();
+    DeleteFileW(tmpW.c_str());
+    return{false,"Cannot install downloaded file (Win32 error "+
+                  std::to_string(err)+"): "+targetW};
+  }
+
+  stage("Downloader::install_verify");
+  if(GetFileAttributesW(targetW.c_str())==INVALID_FILE_ATTRIBUTES){
+    DeleteFileW(tmpW.c_str());
+    return{false,"Downloaded file was copied but cannot be opened: "+targetW};
+  }
+
+  stage("Downloader::install_cleanup");
+  DeleteFileW(tmpW.c_str());
   return{true,{}};
-}
 }
