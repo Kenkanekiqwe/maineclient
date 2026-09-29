@@ -3,6 +3,7 @@
 #include <cstdio>
 #include <array>
 #include <regex>
+#include <cstdlib>
 namespace maine::core {
 static std::string runVersion(const std::filesystem::path& exe){
   std::string cmd="\""+exe.string()+"\" -version 2>&1";
@@ -15,7 +16,7 @@ int JavaRuntimeManager::parseMajor(const std::string& v){
 }
 JavaRuntime JavaRuntimeManager::detect(int requiredMajor) const{
   std::vector<std::filesystem::path> candidates;
-  if(const char* home=std::getenv("JAVA_HOME");home) candidates.push_back(std::filesystem::path(home)/"bin/java.exe");
+  char* home=nullptr; size_t homeLen=0; if(_dupenv_s(&home,&homeLen,"JAVA_HOME")==0 && home){ candidates.push_back(std::filesystem::path(home)/"bin/java.exe"); free(home); }
   candidates.push_back("java.exe");
   for(auto& p:candidates){
     auto text=runVersion(p); int major=parseMajor(text); if(major && (!requiredMajor||major==requiredMajor))
