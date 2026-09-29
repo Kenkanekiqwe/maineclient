@@ -21,6 +21,7 @@ add_executable(MaineClient
   src/minecraft/download.cpp src/minecraft/download.hpp
   src/minecraft/version_downloader.cpp src/minecraft/version_downloader.hpp
   src/minecraft/launcher.cpp src/minecraft/launcher.hpp
+  src/minecraft/native_extractor.cpp src/minecraft/native_extractor.hpp
   src/optimization/profile.cpp src/optimization/profile.hpp
   src/optimization/optimizer.cpp src/optimization/optimizer.hpp
   src/optimization/runtime_optimizer.cpp src/optimization/runtime_optimizer.hpp
