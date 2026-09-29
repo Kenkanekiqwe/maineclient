@@ -15,11 +15,12 @@ int runMainWindow(const maine::core::Paths& paths,maine::core::Config& config) {
   auto java=maine::core::JavaRuntimeManager(paths).detect();
   std::ostringstream b;
   b<<"Maine Client\n\nMinecraft: "<<config.selectedVersion<<"\nLoader: "<<config.selectedLoader
-   <<"\nInstance: "<<config.selectedInstance<<"\n\nCPU: "<<h.cpuName
+   <<"\nInstance: "<<config.selectedInstance<<"\nAccount: "<<config.selectedAccount<<" (offline)\n\nCPU: "<<h.cpuName
    <<"\nThreads: "<<h.logicalProcessors<<"\nRAM: "<<h.totalRamMb<<" MB\nGPU: "<<h.gpuName
    <<"\nJava: "<<(java.executable.empty()?"not found":java.executable.string())
    <<"\n\n"<<profile.summary<<"\n\nPreparing Minecraft metadata...";
   std::string error; maine::minecraft::MinecraftLauncher launcher(paths,config);
+  maine::minecraft::LaunchRequest account; account.username=config.selectedAccount;
   if(!launcher.prepare(error)) b<<"\n\nDownload error: "<<error;
   else b<<"\n\nMinecraft metadata ready.";
   MessageBoxA(nullptr,b.str().c_str(),"Maine Client",MB_OK|MB_ICONINFORMATION);
