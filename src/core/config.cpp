@@ -12,6 +12,7 @@ Config Config::load(const std::filesystem::path& file) {
   c.selectedVersion=get("version",c.selectedVersion);
   c.selectedLoader=get("loader",c.selectedLoader);
   c.selectedInstance=get("instance",c.selectedInstance);
+  c.selectedAccount=get("account",c.selectedAccount);
   return c;
 }
 void Config::save(const std::filesystem::path& file) const {
@@ -19,6 +20,7 @@ void Config::save(const std::filesystem::path& file) const {
   std::ofstream out(file);
   out<<"{\n  \"version\": \""<<selectedVersion<<"\",\n"
      <<"  \"loader\": \""<<selectedLoader<<"\",\n"
-     <<"  \"instance\": \""<<selectedInstance<<"\"\n}\n";
+     <<"  \"instance\": \""<<selectedInstance<<"\",\n"
+     <<"  \"account\": \""<<selectedAccount<<"\"\n}\n";
 }
 }
