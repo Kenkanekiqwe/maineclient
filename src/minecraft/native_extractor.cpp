@@ -6,7 +6,8 @@
 namespace maine::minecraft {
 static unsigned short le16(const unsigned char* p){return (unsigned short)p[0]|((unsigned short)p[1]<<8);}
 static unsigned int le32(const unsigned char* p){return (unsigned int)le16(p)|((unsigned int)le16(p+2)<<16);}
-#include <vector>\nbool NativeExtractor::extractJar(const std::filesystem::path& archive,const std::filesystem::path& dest,std::string& error){
+#include <vector>
+bool NativeExtractor::extractJar(const std::filesystem::path& archive,const std::filesystem::path& dest,std::string& error){
  std::filesystem::create_directories(dest);
  std::string a=archive.string(), d=dest.string();
  auto quote=[](std::string s){std::string r="\""; for(char ch:s){if(ch=='\"') r+="\\\""; else r+=ch;} return r+"\"";};
