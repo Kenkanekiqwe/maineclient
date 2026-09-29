@@ -21,7 +21,7 @@ bool MinecraftLauncher::launch(const LaunchRequest& req,std::string& e) const {
   auto instance=paths_.instances/config_.selectedInstance; std::filesystem::create_directories(instance);
   std::string cp=jar.string();
   for(const auto& x:j.value("libraries",json::array())){
-    auto a=x.value("downloads",json{}).value("artifact",json{}); auto p=a.value("path","");
+    auto rules=x.value("rules",json::array()); bool allowed=rules.empty(); for(const auto& r:rules) if(r.value("action","")=="allow") allowed=true; if(!allowed) continue; auto a=x.value("downloads",json{}).value("artifact",json{}); auto p=a.value("path","");
     if(!p.empty()) cp+=";"+(paths_.libraries/p).string();
   }
   auto main=j.value("mainClass","");
