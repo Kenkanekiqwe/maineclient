@@ -3,11 +3,15 @@
 #include <string>
 #include <vector>
 namespace maine::minecraft {
-struct Library { std::string name; std::string url; std::string sha1; std::string path; };
+struct Library {
+  std::string name, url, sha1, path;
+  bool native=false;
+};
 struct VersionManifest {
-  std::string id, type, mainClass, assets, assetIndexId, assetIndexUrl, assetIndexSha1, clientUrl, clientSha1;
-  std::string javaMajor;
+  std::string id, type, mainClass, assets, assetIndexId, assetIndexUrl, assetIndexSha1;
+  std::string clientUrl, clientSha1, javaMajor;
   std::vector<Library> libraries;
+  std::vector<std::string> jvmArguments, gameArguments;
 };
 class ManifestManager {
 public:
