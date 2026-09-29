@@ -18,17 +18,35 @@ bool MinecraftLauncher::launch(const LaunchRequest& req,std::string& e) const {
   maine::core::JavaRuntimeManager jm(paths_); auto java=jm.detect(required);
   if(java.executable.empty()) java=jm.detect();
   if(java.executable.empty()){e="Java runtime not found";return false;}
-  auto instance=paths_.instances/config_.selectedInstance; std::filesystem::create_directories(instance);
+  auto instance=paths_.instances/config_.selectedInstance;
+  std::filesystem::create_directories(instance);
+  auto natives=instance/"natives";
+  std::filesystem::create_directories(natives);
   std::string cp=jar.string();
+  auto allowed=[&](const json& x){
+    if(!x.contains("rules")||!x["rules"].is_array()) return true;
+    bool result=false;
+    for(const auto& r:x["rules"]) if(r.value("action","")=="allow") result=true; else if(r.value("action","")=="disallow") result=false;
+    return result;
+  };
   for(const auto& x:j.value("libraries",json::array())){
-    auto rules=x.value("rules",json::array()); bool allowed=rules.empty(); for(const auto& r:rules) if(r.value("action","")=="allow") allowed=true; if(!allowed) continue; auto a=x.value("downloads",json{}).value("artifact",json{}); auto p=a.value("path","");
+    if(!allowed(x)) continue;
+    auto a=x.value("downloads",json{}).value("artifact",json{});
+    auto p=a.value("path","");
     if(!p.empty()) cp+=";"+(paths_.libraries/p).string();
   }
   auto main=j.value("mainClass","");
   if(main.empty()){e="Missing mainClass";return false;}
-  std::string cmd="\""+java.executable.string()+"\" -Xms"+std::to_string(config_.minMemoryMb)+"M -Xmx"+std::to_string(config_.maxMemoryMb)+"M -cp \""+cp+"\" "+main;
-  cmd+=" --username "+req.username+" --version "+config_.selectedVersion+" --gameDir \""+instance.string()+"\"";
-  cmd+=" --assetsDir \""+paths_.assets.string()+"\" --assetIndex "+j.value("assets","")+" --uuid "+req.uuid+" --accessToken "+req.accessToken;
+  auto q=[](std::string s){ for(char& ch:s) if(ch=='"') ch=' '; return s; };
+  std::string gameDir=instance.string(), assets=paths_.assets.string(), nativeDir=natives.string();
+  std::string cmd="\""+java.executable.string()+"\"";
+  cmd+=" -Xms"+std::to_string(config_.minMemoryMb)+"M -Xmx"+std::to_string(config_.maxMemoryMb)+"M";
+  cmd+=" -Djava.library.path=\""+nativeDir+"\"";
+  cmd+=" -cp \""+cp+"\" "+main;
+  cmd+=" --username \""+q(req.username)+"\" --version \""+config_.selectedVersion+"\"";
+  cmd+=" --gameDir \""+gameDir+"\" --assetsDir \""+assets+"\"";
+  cmd+=" --assetIndex \""+j.value("assets", "")+"\" --uuid \""+req.uuid+"\" --accessToken \""+req.accessToken+"\"";
+  cmd+=" --userType msa --versionType "+j.value("type","release");
   STARTUPINFOA si{}; si.cb=sizeof(si); PROCESS_INFORMATION pi{};
   std::vector<char> buf(cmd.begin(),cmd.end()); buf.push_back('\0');
   if(!CreateProcessA(nullptr,buf.data(),nullptr,nullptr,FALSE,CREATE_NO_WINDOW,nullptr,instance.string().c_str(),&si,&pi)){
