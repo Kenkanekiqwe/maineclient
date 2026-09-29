@@ -22,7 +22,8 @@ int runMainWindow(const maine::core::Paths& paths,maine::core::Config& config) {
   std::string error; maine::minecraft::MinecraftLauncher launcher(paths,config);
   maine::minecraft::LaunchRequest account; account.username=config.selectedAccount;
   if(!launcher.prepare(error)) b<<"\n\nDownload error: "<<error;
-  else b<<"\n\nMinecraft metadata ready.";
+  else if(!launcher.launch(account,error)) b<<"\n\nLaunch error: "<<error;
+  else b<<"\n\nMinecraft launched.";
   MessageBoxA(nullptr,b.str().c_str(),"Maine Client",MB_OK|MB_ICONINFORMATION);
 #endif
   config.save(paths.config/"settings.json"); return 0;
