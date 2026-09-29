@@ -17,6 +17,12 @@ bool ManifestManager::load(const std::filesystem::path& file,VersionManifest& o,
       Library l; l.name=x.value("name","");
       if(x.contains("rules")&&x["rules"].is_array()){ l.allowed=false; for(const auto& rule:x["rules"]) if(rule.value("action","")=="allow") l.allowed=true; } l.url=a.value("url",""); l.sha1=a.value("sha1","");
       l.path=a.value("path","");
+      if(x.contains("natives") && x["natives"].is_object() && x["natives"].contains("windows")){
+        std::string classifier=x["natives"]["windows"].get<std::string>();
+        auto classifiers=d.value("classifiers",json{});
+        auto ca=classifiers.value(classifier,json{});
+        l.native=true; l.nativeUrl=ca.value("url",""); l.nativeSha1=ca.value("sha1",""); l.nativePath=ca.value("path","");
+      }
       for(const auto& n:x.value("natives",json::object())) if(n.is_string()) l.native=true;
       if(!l.name.empty()&&!l.url.empty()&&!l.path.empty()) o.libraries.push_back(std::move(l));
     }
