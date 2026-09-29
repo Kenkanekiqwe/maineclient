@@ -9,6 +9,8 @@
 #endif
 
 #ifdef _WIN32
+static const char* g_crashStage="startup";
+extern "C" void MaineSetCrashStage(const char* stage){ g_crashStage=stage; }
 static LONG WINAPI crashHandler(EXCEPTION_POINTERS* info){
   const DWORD code=info&&info->ExceptionRecord?info->ExceptionRecord->ExceptionCode:0;
   const ULONG_PTR address=info&&info->ExceptionRecord?
@@ -19,7 +21,8 @@ static LONG WINAPI crashHandler(EXCEPTION_POINTERS* info){
   std::string path=(n&&n<MAX_PATH)?std::string(temp)+"MaineClient_crash.log":"MaineClient_crash.log";
 
   char line[512]{};
-  sprintf_s(line,"MaineClient crashed. Exception=0x%08lX Address=0x%p\r\n",
+  sprintf_s(line,"MaineClient crashed. Stage=%s Exception=0x%08lX Address=0x%p\r\n",
+            g_crashStage,
             static_cast<unsigned long>(code),
             reinterpret_cast<void*>(address));
 
@@ -51,9 +54,21 @@ int main(){
 #endif
 
   try{
+#ifdef _WIN32
+    MaineSetCrashStage("Paths::create");
+#endif
     auto paths=maine::core::Paths::create();
+#ifdef _WIN32
+    MaineSetCrashStage("Paths::ensure");
+#endif
     paths.ensure();
+#ifdef _WIN32
+    MaineSetCrashStage("Config::load");
+#endif
     auto config=maine::core::Config::load(paths.config/"settings.json");
+#ifdef _WIN32
+    MaineSetCrashStage("runMainWindow");
+#endif
     return maine::ui::runMainWindow(paths,config);
   }catch(const std::exception& ex){
     writeFatalLog(ex.what());
