@@ -22,7 +22,7 @@ bool VersionDownloader::install(const std::string& version,std::string& e){
     if(!std::filesystem::exists(jar) || (!vm.clientSha1.empty() && Downloader::sha1(jar)!=vm.clientSha1)){
       r=Downloader::file(vm.clientUrl,jar,vm.clientSha1); if(!r.ok){e=r.error;return false;}
     }
-    for(const auto& lib:vm.libraries){
+    for(const auto& lib:vm.libraries) if(lib.allowed){
       auto target=paths_.libraries/lib.path;
       if(!std::filesystem::exists(target) || (!lib.sha1.empty()&&Downloader::sha1(target)!=lib.sha1)){
         r=Downloader::file(lib.url,target,lib.sha1); if(!r.ok){e="Library "+lib.name+": "+r.error;return false;}
