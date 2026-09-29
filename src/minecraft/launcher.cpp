@@ -19,7 +19,11 @@ bool MinecraftLauncher::launch(const LaunchRequest& req,std::string& e) const {
 const auto dir=paths_.versions/config_.selectedVersion; const auto meta=dir/(config_.selectedVersion+".json"); const auto jar=dir/(config_.selectedVersion+".jar");
 if(!std::filesystem::exists(meta)||!std::filesystem::exists(jar)){e="Minecraft is not installed. Prepare the selected version first.";return false;}
 json j;try{std::ifstream in(meta);if(!in){e="Cannot open Minecraft metadata";return false;}in>>j;}catch(const std::exception& x){e=std::string("Invalid Minecraft metadata: ")+x.what();return false;}
-const int required=j.value("javaVersion",json{}).value("majorVersion",0); maine::core::JavaRuntimeManager jm(paths_);auto java=jm.detect(required);if(java.executable.empty())java=jm.detect();if(java.executable.empty()){e="Java runtime not found";return false;}
+const int required=j.value("javaVersion",json{}).value("majorVersion",0); maine::core::JavaRuntimeManager jm(paths_);auto java=jm.ensure(required);
+if(java.executable.empty()){
+  e="Java "+std::to_string(required)+" could not be installed automatically. Check your internet connection or write logs\\java-runtime.log.";
+  return false;
+}
 const auto instance=paths_.instances/config_.selectedInstance;const auto nativeRoot=instance/"natives";std::filesystem::create_directories(nativeRoot);
 std::string cp=jar.string();
 for(const auto& lib:j.value("libraries",json::array())){if(!rulesAllow(lib))continue;auto downloads=lib.value("downloads",json{});auto artifact=downloads.value("artifact",json{});auto path=artifact.value("path","");if(!path.empty()){auto file=paths_.libraries/path;if(!std::filesystem::exists(file)){e="Missing library: "+file.string();return false;}cp+=";"+file.string();}auto natives=lib.value("natives",json{});if(natives.is_object()&&natives.contains("windows")){auto classifier=natives["windows"].get<std::string>();auto native=downloads.value("classifiers",json{}).value(classifier,json{});auto nativePath=native.value("path","");if(!nativePath.empty()){auto archive=paths_.libraries/nativePath;if(!std::filesystem::exists(archive)){e="Missing native library: "+archive.string();return false;}std::string ne;if(!NativeExtractor::extractJar(archive,nativeRoot,ne)){e="Native extraction failed: "+ne;return false;}}}}
