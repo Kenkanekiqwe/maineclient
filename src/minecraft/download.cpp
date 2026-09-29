@@ -25,12 +25,27 @@ static bool urlParts(const std::wstring& u,std::wstring& host,std::wstring& path
 std::string Downloader::sha1(const std::filesystem::path& f){
   std::ifstream in(f,std::ios::binary); if(!in)return{};
   BCRYPT_ALG_HANDLE alg=nullptr; BCRYPT_HASH_HANDLE hash=nullptr; DWORD cb=0,obj=0;
-  if(BCryptOpenAlgorithmProvider(&alg,BCRYPT_SHA1_ALGORITHM,nullptr,0))return{};
-  BCryptGetProperty(alg,BCRYPT_OBJECT_LENGTH,(PUCHAR)&obj,sizeof(obj),&cb,0);
-  std::vector<UCHAR> mem(obj),digest(20); BCryptCreateHash(alg,&hash,mem.data(),obj,nullptr,0,0);
-  std::vector<char> buf(1<<20); while(in){in.read(buf.data(),buf.size()); auto n=in.gcount(); if(n) BCryptHashData(hash,(PUCHAR)buf.data(),(ULONG)n,0);}
-  BCryptFinishHash(hash,digest.data(),20,0); BCryptDestroyHash(hash); BCryptCloseAlgorithmProvider(alg,0);
-  static const char* hx="0123456789abcdef"; std::string s; for(auto b:digest){s+=hx[b>>4];s+=hx[b&15];} return s;
+  if(BCryptOpenAlgorithmProvider(&alg,BCRYPT_SHA1_ALGORITHM,nullptr,0)!=0)return{};
+  if(BCryptGetProperty(alg,BCRYPT_OBJECT_LENGTH,(PUCHAR)&obj,sizeof(obj),&cb,0)!=0 || obj==0){
+    BCryptCloseAlgorithmProvider(alg,0); return{};
+  }
+  std::vector<UCHAR> mem(obj),digest(20);
+  if(BCryptCreateHash(alg,&hash,mem.data(),obj,nullptr,0,0)!=0 || !hash){
+    BCryptCloseAlgorithmProvider(alg,0); return{};
+  }
+  bool good=true;
+  std::vector<char> buf(1<<20);
+  while(in){
+    in.read(buf.data(),buf.size());
+    const auto n=in.gcount();
+    if(n && BCryptHashData(hash,(PUCHAR)buf.data(),(ULONG)n,0)!=0){good=false;break;}
+  }
+  if(!in.eof()) good=false;
+  if(good && BCryptFinishHash(hash,digest.data(),20,0)!=0) good=false;
+  BCryptDestroyHash(hash); BCryptCloseAlgorithmProvider(alg,0);
+  if(!good)return{};
+  static const char* hx="0123456789abcdef"; std::string s; s.reserve(40);
+  for(auto b:digest){s+=hx[b>>4];s+=hx[b&15];} return s;
 }
 DownloadResult Downloader::file(const std::string& url,const std::filesystem::path& target,const std::string& expected){
   stage("Downloader::urlParts");
@@ -56,6 +71,22 @@ DownloadResult Downloader::file(const std::string& url,const std::filesystem::pa
   stage("Downloader::sha1");
   if(!expected.empty() && sha1(tmp)!=expected){std::error_code ec;std::filesystem::remove(tmp,ec);return{false,"SHA-1 mismatch: "+url};}
   stage("Downloader::install");
-  std::error_code ec;std::filesystem::remove(target,ec);std::filesystem::rename(tmp,target,ec); if(ec)return{false,"Cannot install downloaded file: "+ec.message()}; return{true,{}};
+  std::error_code ec;
+  if(!std::filesystem::exists(tmp,ec) || ec){
+    return{false,"Downloaded temporary file is missing: "+tmp.string()};
+  }
+  ec.clear();
+  std::filesystem::create_directories(target.parent_path(),ec);
+  if(ec){
+    std::filesystem::remove(tmp,ec);
+    return{false,"Cannot create target directory: "+ec.message()};
+  }
+  ec.clear();
+  if(!MoveFileExW(tmp.c_str(),target.c_str(),MOVEFILE_REPLACE_EXISTING|MOVEFILE_COPY_ALLOWED|MOVEFILE_WRITE_THROUGH)){
+    const DWORD winErr=GetLastError();
+    std::filesystem::remove(tmp,ec);
+    return{false,"Cannot install downloaded file (Win32 error "+std::to_string(winErr)+"): "+target.string()};
+  }
+  return{true,{}};
 }
 }
