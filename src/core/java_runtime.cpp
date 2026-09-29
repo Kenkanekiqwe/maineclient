@@ -107,7 +107,7 @@ JavaRuntime JavaRuntimeManager::ensure(int requiredMajor) const{
   const std::string url=
     "https://api.adoptium.net/v3/binary/latest/"+
     std::to_string(requiredMajor)+
-    "/ga/windows/x64/jdk/hotspot/normal/eclipse";
+    "/ga/windows/x64/jre/hotspot/normal/eclipse";
 
   auto result=maine::minecraft::Downloader::file(url,archive);
   if(!result.ok)return{};
@@ -143,11 +143,15 @@ JavaRuntime JavaRuntimeManager::ensure(int requiredMajor) const{
     std::filesystem::rename(extractedRoot,installRoot,ec);
   }
 
-  if(ec){
+  if(extractedRoot==staging || ec){
     ec.clear();
+    std::filesystem::remove_all(installRoot,ec);
     std::filesystem::create_directories(installRoot,ec);
-    for(std::filesystem::recursive_directory_iterator it(staging,ec),end;it!=end&&!ec;it.increment(ec)){
-      const auto rel=std::filesystem::relative(it->path(),staging,ec);
+
+    // Archives without a top-level directory are copied directly.
+    const auto sourceRoot=(extractedRoot==staging)?staging:extractedRoot;
+    for(std::filesystem::recursive_directory_iterator it(sourceRoot,ec),end;it!=end&&!ec;it.increment(ec)){
+      const auto rel=std::filesystem::relative(it->path(),sourceRoot,ec);
       if(ec)break;
       const auto dst=installRoot/rel;
       if(it->is_directory(ec))std::filesystem::create_directories(dst,ec);
