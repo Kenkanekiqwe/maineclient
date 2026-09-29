@@ -9,6 +9,7 @@ struct LaunchRequest {
   std::string username="Player";
   std::string uuid="00000000-0000-0000-0000-000000000000";
   std::string accessToken="0";
+  bool offline=true;
 };
 class MinecraftLauncher {
   maine::core::Paths paths_;
