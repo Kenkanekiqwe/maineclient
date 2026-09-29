@@ -24,7 +24,7 @@ bool ManifestManager::load(const std::filesystem::path& file,VersionManifest& o,
         l.native=true; l.nativeUrl=ca.value("url",""); l.nativeSha1=ca.value("sha1",""); l.nativePath=ca.value("path","");
       }
       for(const auto& n:x.value("natives",json::object())) if(n.is_string()) l.native=true;
-      if(!l.name.empty()&&!l.url.empty()&&!l.path.empty()) o.libraries.push_back(std::move(l));
+      if(!l.name.empty() && ((!l.url.empty()&&!l.path.empty()) || (l.native&&!l.nativeUrl.empty()&&!l.nativePath.empty()))) o.libraries.push_back(std::move(l));
     }
     auto readArgs=[&](const char* key,std::vector<std::string>& out){
       for(const auto& a:j.value(key,json::array())) if(a.is_string()) out.push_back(a.get<std::string>());
