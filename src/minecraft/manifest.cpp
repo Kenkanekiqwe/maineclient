@@ -2,45 +2,116 @@
 #include <fstream>
 #include <nlohmann/json.hpp>
 using json=nlohmann::json;
+
 namespace maine::minecraft {
+
+static json objectOrEmpty(const json& v){
+  return v.is_object()?v:json::object();
+}
+
+static json arrayOrEmpty(const json& v){
+  return v.is_array()?v:json::array();
+}
+
+static std::string stringValue(const json& parent,const char* key,const std::string& fallback=""){
+  if(!parent.is_object()||!parent.contains(key)||!parent[key].is_string()) return fallback;
+  return parent[key].get<std::string>();
+}
+
 bool ManifestManager::load(const std::filesystem::path& file,VersionManifest& o,std::string& e){
   try{
-    std::ifstream f(file); if(!f){e="Cannot open version metadata: "+file.string();return false;}
-    json j; f>>j; o={};
-    o.id=j.value("id",""); o.type=j.value("type",""); o.mainClass=j.value("mainClass","");
-    o.assets=j.value("assets",""); o.javaMajor=std::to_string(j.value("javaVersion",json{}).value("majorVersion",0));
-    auto ai=j.value("assetIndex",json{}); o.assetIndexId=ai.value("id",""); o.assetIndexUrl=ai.value("url",""); o.assetIndexSha1=ai.value("sha1","");
-    auto client=j.value("downloads",json{}).value("client",json{}); o.clientUrl=client.value("url",""); o.clientSha1=client.value("sha1","");
-    for(const auto& x:j.value("libraries",json::array())){
-      auto d=x.value("downloads",json{});
-      auto a=d.value("artifact",json{});
-      Library l; l.name=x.value("name","");
-      if(x.contains("rules")&&x["rules"].is_array()){ l.allowed=false; for(const auto& rule:x["rules"]) if(rule.value("action","")=="allow") l.allowed=true; } l.url=a.value("url",""); l.sha1=a.value("sha1","");
-      l.path=a.value("path","");
-      if(x.contains("natives") && x["natives"].is_object() && x["natives"].contains("windows")){
-        std::string classifier=x["natives"]["windows"].get<std::string>();
-        auto classifiers=d.value("classifiers",json{});
-        auto ca=classifiers.value(classifier,json{});
-        l.native=true; l.nativeUrl=ca.value("url",""); l.nativeSha1=ca.value("sha1",""); l.nativePath=ca.value("path","");
+    std::ifstream f(file);
+    if(!f){e="Cannot open version metadata: "+file.string();return false;}
+
+    json j; f>>j;
+    if(!j.is_object()){e="Invalid Minecraft metadata: root is not an object";return false;}
+
+    o={};
+    o.id=stringValue(j,"id");
+    o.type=stringValue(j,"type");
+    o.mainClass=stringValue(j,"mainClass");
+    o.assets=stringValue(j,"assets");
+
+    const auto javaVersion=objectOrEmpty(j.value("javaVersion",json{}));
+    o.javaMajor=std::to_string(javaVersion.value("majorVersion",0));
+
+    const auto ai=objectOrEmpty(j.value("assetIndex",json{}));
+    o.assetIndexId=stringValue(ai,"id");
+    o.assetIndexUrl=stringValue(ai,"url");
+    o.assetIndexSha1=stringValue(ai,"sha1");
+
+    const auto downloads=objectOrEmpty(j.value("downloads",json{}));
+    const auto client=objectOrEmpty(downloads.value("client",json{}));
+    o.clientUrl=stringValue(client,"url");
+    o.clientSha1=stringValue(client,"sha1");
+
+    for(const auto& x:arrayOrEmpty(j.value("libraries",json::array()))){
+      if(!x.is_object()) continue;
+
+      const auto d=objectOrEmpty(x.value("downloads",json{}));
+      const auto a=objectOrEmpty(d.value("artifact",json{}));
+
+      Library l;
+      l.name=stringValue(x,"name");
+      l.url=stringValue(a,"url");
+      l.sha1=stringValue(a,"sha1");
+      l.path=stringValue(a,"path");
+
+      const auto rules=x.value("rules",json{});
+      if(rules.is_array()){
+        l.allowed=false;
+        for(const auto& rule:rules){
+          if(rule.is_object() && stringValue(rule,"action")=="allow") l.allowed=true;
+          else if(rule.is_object() && stringValue(rule,"action")=="disallow") l.allowed=false;
+        }
+      }else{
+        l.allowed=true;
       }
-      for(const auto& n:x.value("natives",json::object())) if(n.is_string()) l.native=true;
-      if(!l.name.empty() && ((!l.url.empty()&&!l.path.empty()) || (l.native&&!l.nativeUrl.empty()&&!l.nativePath.empty()))) o.libraries.push_back(std::move(l));
+
+      const auto natives=x.value("natives",json{});
+      if(natives.is_object() && natives.contains("windows") && natives["windows"].is_string()){
+        const std::string classifier=natives["windows"].get<std::string>();
+        const auto classifiers=objectOrEmpty(d.value("classifiers",json{}));
+        const auto ca=objectOrEmpty(classifiers.value(classifier,json{}));
+        l.native=true;
+        l.nativeUrl=stringValue(ca,"url");
+        l.nativeSha1=stringValue(ca,"sha1");
+        l.nativePath=stringValue(ca,"path");
+      }
+
+      if(l.native) o.libraries.push_back(l);
+      else if(!l.name.empty()&&!l.url.empty()&&!l.path.empty()) o.libraries.push_back(l);
     }
-    auto readArgs=[&](const char* key,std::vector<std::string>& out){
-      for(const auto& a:j.value(key,json::array())) if(a.is_string()) out.push_back(a.get<std::string>());
-    };
-    if(j.contains("minecraftArguments") && j["minecraftArguments"].is_string()) o.gameArguments.push_back(j["minecraftArguments"].get<std::string>());
-    if(j.contains("arguments")){
-      auto args=j["arguments"];
-      auto collect=[&](const char* key,std::vector<std::string>& out){ if(args.contains(key)&&args[key].is_array()) for(const auto& a:args[key]) if(a.is_string()) out.push_back(a.get<std::string>()); };
-      collect("jvm",o.jvmArguments); collect("game",o.gameArguments);
+
+    if(j.contains("minecraftArguments")&&j["minecraftArguments"].is_string())
+      o.gameArguments.push_back(j["minecraftArguments"].get<std::string>());
+
+    const auto arguments=objectOrEmpty(j.value("arguments",json{}));
+    for(const char* key:{"jvm","game"}){
+      const auto values=arrayOrEmpty(arguments.value(key,json::array()));
+      auto& out=(std::string(key)=="jvm")?o.jvmArguments:o.gameArguments;
+      for(const auto& value:values) if(value.is_string()) out.push_back(value.get<std::string>());
     }
+
     if(o.id.empty()){e="Invalid version metadata: missing id";return false;}
     return true;
-  }catch(const std::exception& ex){e=std::string("Invalid Minecraft JSON: ")+ex.what();return false;}
+  }catch(const std::exception& ex){
+    e=std::string("Invalid Minecraft JSON: ")+ex.what();
+    return false;
+  }
 }
+
 bool ManifestManager::save(const std::filesystem::path& file,const VersionManifest& m,std::string& e){
-  try{json j={{"id",m.id},{"type",m.type},{"mainClass",m.mainClass}}; std::ofstream f(file); if(!f){e="Cannot write metadata";return false;} f<<j.dump(2); return true;}
-  catch(const std::exception& ex){e=ex.what();return false;}
+  try{
+    json j={{"id",m.id},{"type",m.type},{"mainClass",m.mainClass}};
+    std::ofstream f(file);
+    if(!f){e="Cannot write metadata";return false;}
+    f<<j.dump(2);
+    return true;
+  }catch(const std::exception& ex){
+    e=ex.what();
+    return false;
+  }
 }
+
 }
