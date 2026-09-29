@@ -6,7 +6,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 if(MSVC)
   add_compile_options(/W4 /permissive- /EHsc)
 endif()
-add_executable(MaineClient WIN32
+add_executable(MaineClient
   src/main.cpp
   src/core/paths.cpp src/core/paths.hpp
   src/core/config.cpp src/core/config.hpp
