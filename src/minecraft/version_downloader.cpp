@@ -22,6 +22,12 @@ bool VersionDownloader::install(const std::string& version,std::string& e){
     if(!std::filesystem::exists(jar) || (!vm.clientSha1.empty() && Downloader::sha1(jar)!=vm.clientSha1)){
       r=Downloader::file(vm.clientUrl,jar,vm.clientSha1); if(!r.ok){e=r.error;return false;}
     }
+    if(!vm.assetIndexUrl.empty()){
+      auto ai=paths_.assets/"indexes"/(vm.assetIndexId+".json");
+      if(!std::filesystem::exists(ai)||(!vm.assetIndexSha1.empty()&&Downloader::sha1(ai)!=vm.assetIndexSha1)){
+        r=Downloader::file(vm.assetIndexUrl,ai,vm.assetIndexSha1); if(!r.ok){e="Asset index: "+r.error;return false;}
+      }
+    }
     for(const auto& lib:vm.libraries) if(lib.allowed){
       auto target=paths_.libraries/lib.path;
       if(!std::filesystem::exists(target) || (!lib.sha1.empty()&&Downloader::sha1(target)!=lib.sha1)){
