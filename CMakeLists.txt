@@ -13,11 +13,14 @@ add_executable(MaineClient
   src/core/hardware.cpp src/core/hardware.hpp
   src/core/launcher.cpp src/core/launcher.hpp
   src/minecraft/version.cpp src/minecraft/version.hpp
+  src/minecraft/manifest.cpp src/minecraft/manifest.hpp
+  src/minecraft/download.cpp src/minecraft/download.hpp
+  src/minecraft/version_downloader.cpp src/minecraft/version_downloader.hpp
   src/optimization/profile.cpp src/optimization/profile.hpp
   src/optimization/optimizer.cpp src/optimization/optimizer.hpp
   src/ui/main_window.cpp src/ui/main_window.hpp
 )
 target_compile_definitions(MaineClient PRIVATE UNICODE _UNICODE NOMINMAX WIN32_LEAN_AND_MEAN)
 if(WIN32)
-  target_link_libraries(MaineClient PRIVATE advapi32 ole32 shell32 version userenv dxgi)
+  target_link_libraries(MaineClient PRIVATE advapi32 ole32 shell32 version userenv dxgi winhttp bcrypt)
 endif()
