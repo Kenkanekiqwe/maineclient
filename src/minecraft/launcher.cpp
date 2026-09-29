@@ -8,6 +8,7 @@
 #include <vector>
 #include <string>
 #include <utility>
+#include <functional>
 using json=nlohmann::json;
 namespace maine::minecraft {
 static std::string replaceAll(std::string s,const std::string& a,const std::string& b){size_t p=0;while((p=s.find(a,p))!=std::string::npos){s.replace(p,a.size(),b);p+=b.size();}return s;}
@@ -27,7 +28,7 @@ const std::string gameDir=instance.string(),assets=paths_.assets.string(),native
 auto substitute=[&](std::string s){const std::pair<std::string,std::string> vars[]={
 {"${auth_player_name}",req.username},{"${version_name}",config_.selectedVersion},{"${game_directory}",gameDir},{"${assets_root}",assets},{"${assets_index_name}",j.value("assets","")},{"${auth_uuid}",req.uuid},{"${auth_access_token}",req.accessToken},{"${user_type}","msa"},{"${version_type}",j.value("type","release")},{"${natives_directory}",nativeDir},{"${library_directory}",paths_.libraries.string()},{"${launcher_name}","MaineClient"},{"${launcher_version}","0.1.0"},{"${classpath}",cp}};for(const auto& v:vars)s=replaceAll(s,v.first,v.second);return s;};
 std::vector<std::string> jvmArgs,gameArgs;
-auto append=[&](const json& v,std::vector<std::string>& out){if(v.is_string()){out.push_back(substitute(v.get<std::string>()));}else if(v.is_array()){for(const auto& x:v)append(x,out);}else if(v.is_object()&&rulesAllow(v)){append(v.value("value",json{}),out);}};
+std::function<void(const json&,std::vector<std::string>&)> append; append=[&](const json& v,std::vector<std::string>& out){if(v.is_string()){out.push_back(substitute(v.get<std::string>()));}else if(v.is_array()){for(const auto& x:v)append(x,out);}else if(v.is_object()&&rulesAllow(v)){append(v.value("value",json{}),out);}};
 if(j.contains("arguments")&&j["arguments"].is_object()){for(const auto& v:j["arguments"].value("jvm",json::array()))append(v,jvmArgs);for(const auto& v:j["arguments"].value("game",json::array()))append(v,gameArgs);}else{jvmArgs={"-Xms"+std::to_string(config_.minMemoryMb)+"M","-Xmx"+std::to_string(config_.maxMemoryMb)+"M","-Djava.library.path="+nativeDir,"-cp",cp};if(j.contains("minecraftArguments")&&j["minecraftArguments"].is_string())gameArgs.push_back(substitute(j["minecraftArguments"].get<std::string>()));else gameArgs={"--username",req.username,"--version",config_.selectedVersion,"--gameDir",gameDir,"--assetsDir",assets,"--assetIndex",j.value("assets",""),"--uuid",req.uuid,"--accessToken",req.accessToken,"--userType","msa","--versionType",j.value("type","release")};}
 if(j.contains("arguments")){jvmArgs.push_back("-Xms"+std::to_string(config_.minMemoryMb)+"M");jvmArgs.push_back("-Xmx"+std::to_string(config_.maxMemoryMb)+"M");}
 std::string cmd=quoteArg(java.executable.string());for(const auto& a:jvmArgs)cmd+=" "+quoteArg(a);cmd+=" "+quoteArg(main);for(const auto& a:gameArgs)cmd+=" "+quoteArg(a);
