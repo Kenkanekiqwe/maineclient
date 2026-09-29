@@ -23,6 +23,7 @@ add_executable(MaineClient
   src/minecraft/launcher.cpp src/minecraft/launcher.hpp
   src/optimization/profile.cpp src/optimization/profile.hpp
   src/optimization/optimizer.cpp src/optimization/optimizer.hpp
+  src/optimization/runtime_optimizer.cpp src/optimization/runtime_optimizer.hpp
   src/ui/main_window.cpp src/ui/main_window.hpp
 )
 target_link_libraries(MaineClient PRIVATE nlohmann_json::nlohmann_json)
